@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: weekly-flows   # never run two copies at once
+  cancel-in-progress: false
+
 jobs:
   collect:
     runs-on: ubuntu-latest
@@ -28,4 +32,5 @@ jobs:
           git config user.email "flows-bot@users.noreply.github.com"
           git add data
           git diff --cached --quiet || git commit -m "Weekly data $(date -u +%Y-%m-%d)"
+          git pull --rebase -X theirs origin main
           git push
