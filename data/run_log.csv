@@ -1,0 +1,5 @@
+run_date,source,ok,detail
+2026-10-04,nse_fii_dii,True,
+2026-10-04,nsdl_fpi,True,
+2026-10-04,indicators,True,
+2026-10-04,telegram,False,"no chat found: open your bot in Telegram, tap Start, then re-run"
