@@ -1,0 +1,31 @@
+name: Weekly market flows
+
+on:
+  schedule:
+    - cron: "17 3 * * 6"   # Saturdays 03:17 UTC = 08:47 India time
+  workflow_dispatch: {}      # lets you run it any time from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Collect data and send Telegram summary
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python collect.py
+      - name: Save data to the repository
+        run: |
+          git config user.name "flows-bot"
+          git config user.email "flows-bot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Weekly data $(date -u +%Y-%m-%d)"
+          git push
