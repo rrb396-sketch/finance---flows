@@ -208,7 +208,9 @@ def main():
     f = results.get("nsdl_fpi")
     if f:
         wk = weekly_fpi_change()
-        lines.append(f"Foreign investors (NSDL), {f['month']} so far: Rs {fmt(f['equity_net_cr'])} cr equity")
+        current = f["month_no"] == NOW.month
+        label = f"{f['month']} so far" if current else f"{f['month']} (latest month NSDL has published)"
+        lines.append(f"Foreign investors (NSDL), {label}: Rs {fmt(f['equity_net_cr'])} cr equity")
         lines.append(f"  This week: Rs {fmt(wk)} cr" if wk is not None else "  Weekly change: available from next run")
     else:
         lines.append("NSDL foreign flows: not available this run")
