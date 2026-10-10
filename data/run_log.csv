@@ -7,3 +7,7 @@ run_date,source,ok,detail
 2026-10-04,nsdl_fpi,True,
 2026-10-04,indicators,True,
 2026-10-04,telegram,True,
+2026-10-10,nse_fii_dii,True,
+2026-10-10,nsdl_fpi,True,
+2026-10-10,indicators,True,
+2026-10-10,telegram,True,
