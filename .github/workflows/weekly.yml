@@ -1,9 +1,10 @@
-name: Weekly market flows
+name: Market flows (daily save + Saturday summary)
 
 on:
   schedule:
-    - cron: "17 3 * * 6"   # Saturdays 03:17 UTC = 08:47 India time
-  workflow_dispatch: {}      # lets you run it any time from the Actions tab
+    - cron: "47 15 * * 1-5"  # Mon-Fri 15:47 UTC = 21:17 India time: save that day's FII/DII (no Telegram)
+    - cron: "17 3 * * 6"     # Saturday 03:17 UTC = 08:47 India time: full run + week totals + Telegram
+  workflow_dispatch: {}      # "Run workflow" button = full Saturday-style run
 
 permissions:
   contents: write
@@ -22,15 +23,20 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Collect data and send Telegram summary
+      - name: Collect data (daily or weekly)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: python collect.py
+        run: |
+          if [ "${{ github.event.schedule }}" = "47 15 * * 1-5" ]; then
+            python collect.py daily
+          else
+            python collect.py weekly
+          fi
       - name: Save data to the repository
         run: |
           git config user.name "flows-bot"
           git config user.email "flows-bot@users.noreply.github.com"
           git add data
-          git diff --cached --quiet || git commit -m "Weekly data $(date -u +%Y-%m-%d)"
+          git diff --cached --quiet || git commit -m "Market data $(date -u +%Y-%m-%d)"
           git pull --rebase -X theirs origin main
           git push
