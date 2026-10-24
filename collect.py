@@ -2,6 +2,8 @@
 Modes (set by the workflow):
   python collect.py daily   -> weekday evenings: saves that day's NSE FII/DII numbers only (NSE publishes one day at a time)
   python collect.py weekly  -> Saturday: everything + week totals (sum of the daily rows) + Telegram summary
+  python collect.py options -> Sunday: option chains only (crypto trades every day)
+Daily and weekly runs also save option chains (Nifty, BTC, ETH, SPY) via options_snapshot.py.
 Every source is tried independently; one failure never stops the others. data/run_log.csv records what happened.
 """
 import csv
@@ -200,6 +202,19 @@ def week_totals():
     return out
 
 
+# ---------- 3c. Option chains (Nifty, BTC, ETH, SPY) ----------
+def options():
+    """Appends today's option-chain snapshot to data/options_log.csv. Each chain is tried on its own."""
+    import options_snapshot
+    out = options_snapshot.snapshot()
+    for w in out["warnings"]:
+        note("options", False, w)
+    got = [k for k, v in out["chains"].items() if v]
+    if not got:
+        raise ValueError("no option chain fetched")
+    return got
+
+
 # ---------- 4. Telegram ----------
 def telegram(text):
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -239,17 +254,20 @@ def write_log():
 
 def main():
     mode = (sys.argv[1] if len(sys.argv) > 1 else "weekly").lower()
-    if mode == "daily":
-        try:
-            d = nse_fii_dii()
-            note("daily_fii_dii", True, d.get("date"))
-        except Exception as e:
-            note("daily_fii_dii", False, f"{type(e).__name__}: {e}")
+    if mode in ("daily", "options"):
+        jobs = [("options", options)] if mode == "options" else [("daily_fii_dii", nse_fii_dii), ("options", options)]
+        for name, fn in jobs:
+            try:
+                d = fn()
+                note(name, True, d.get("date") if isinstance(d, dict) else ",".join(d))
+            except Exception as e:
+                note(name, False, f"{type(e).__name__}: {e}")
         write_log()
         return
 
     results = {}
-    for name, fn in [("nse_fii_dii", nse_fii_dii), ("nsdl_fpi", nsdl_fpi), ("indicators", indicators)]:
+    for name, fn in [("nse_fii_dii", nse_fii_dii), ("nsdl_fpi", nsdl_fpi), ("indicators", indicators),
+                     ("options", options)]:
         try:
             results[name] = fn()
             note(name, True)
