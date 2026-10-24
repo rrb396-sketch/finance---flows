@@ -1,9 +1,13 @@
-"""Weekly collector: public market-flow data -> data/*.csv, plus a Telegram summary.
+"""Market-flow collector: public data -> data/*.csv, plus a weekly Telegram summary.
+Modes (set by the workflow):
+  python collect.py daily   -> weekday evenings: saves that day's NSE FII/DII numbers only (NSE publishes one day at a time)
+  python collect.py weekly  -> Saturday: everything + week totals (sum of the daily rows) + Telegram summary
 Every source is tried independently; one failure never stops the others. data/run_log.csv records what happened.
 """
 import csv
 import io
 import os
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -168,6 +172,34 @@ def indicators():
     return {r["name"]: r for r in rows}
 
 
+# ---------- 3b. Week totals from the saved daily rows ----------
+def week_totals():
+    """Sums FII/DII net for the 7 days before today (covers Mon-Fri for a Saturday run)."""
+    p = DATA / "fii_dii_daily.csv"
+    if not p.exists():
+        return None
+    start, end = NOW.date() - timedelta(days=7), NOW.date()
+    rows = []
+    for r in csv.DictReader(open(p, encoding="utf-8")):
+        try:
+            d = datetime.strptime(r["date"], "%d-%b-%Y").date()
+        except ValueError:
+            continue
+        if start < d < end and num(r["fii_net_cr"]) is not None:
+            rows.append((d, num(r["fii_net_cr"]), num(r["dii_net_cr"])))
+    if not rows:
+        return None
+    rows.sort()
+    weekdays = sum(1 for k in range(1, 8) if (end - timedelta(days=k)).weekday() < 5)
+    out = {"week_ending": str(end - timedelta(days=1)), "days_captured": len(rows), "weekdays": weekdays,
+           "fii_net_cr": round(sum(r[1] for r in rows), 2), "dii_net_cr": round(sum(r[2] or 0 for r in rows), 2),
+           "fii_buy_days": sum(1 for r in rows if r[1] > 0),
+           "dates": " ".join(r[0].strftime("%d-%b") for r in rows), "collected": TODAY}
+    upsert(DATA / "fii_dii_weekly.csv", [out], ["week_ending"],
+           ["week_ending", "days_captured", "weekdays", "fii_net_cr", "dii_net_cr", "fii_buy_days", "dates", "collected"])
+    return out
+
+
 # ---------- 4. Telegram ----------
 def telegram(text):
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -195,7 +227,27 @@ def fmt(v, pct=False):
     return f"{v:+.1f}%" if pct else f"{v:+,.0f}"
 
 
+def write_log():
+    p = DATA / "run_log.csv"
+    new = not p.exists()
+    with open(p, "a", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=["run_date", "source", "ok", "detail"])
+        if new:
+            w.writeheader()
+        w.writerows(log)
+
+
 def main():
+    mode = (sys.argv[1] if len(sys.argv) > 1 else "weekly").lower()
+    if mode == "daily":
+        try:
+            d = nse_fii_dii()
+            note("daily_fii_dii", True, d.get("date"))
+        except Exception as e:
+            note("daily_fii_dii", False, f"{type(e).__name__}: {e}")
+        write_log()
+        return
+
     results = {}
     for name, fn in [("nse_fii_dii", nse_fii_dii), ("nsdl_fpi", nsdl_fpi), ("indicators", indicators)]:
         try:
@@ -214,9 +266,21 @@ def main():
         lines.append(f"  This week: Rs {fmt(wk)} cr" if wk is not None else "  Weekly change: available from next run")
     else:
         lines.append("NSDL foreign flows: not available this run")
-    d = results.get("nse_fii_dii")
-    if d:
-        lines.append(f"NSE {d['date']}: FII {fmt(d.get('fii_net_cr'))} cr, DII {fmt(d.get('dii_net_cr'))} cr")
+    wt = None
+    try:
+        wt = week_totals()
+    except Exception as e:
+        note("week_totals", False, f"{type(e).__name__}: {e}")
+    if wt:
+        lines.append(f"NSE cash market, week to {wt['week_ending']} ({wt['days_captured']} of {wt['weekdays']} weekdays captured):")
+        lines.append(f"  FII Rs {fmt(wt['fii_net_cr'])} cr (bought on {wt['fii_buy_days']} days), DII Rs {fmt(wt['dii_net_cr'])} cr")
+        if wt["days_captured"] < wt["weekdays"]:
+            lines.append("  Missing days = market holiday or a failed daily run (see run_log.csv)")
+    else:
+        d = results.get("nse_fii_dii")
+        if d:
+            lines.append(f"NSE {d['date']} (single day; week totals start after a week of daily runs): "
+                         f"FII {fmt(d.get('fii_net_cr'))} cr, DII {fmt(d.get('dii_net_cr'))} cr")
     i = results.get("indicators") or {}
     for key, label in [("nifty", "Nifty"), ("india_vix", "India VIX"), ("dollar_index", "Dollar index"),
                        ("usd_inr", "USD/INR"), ("us_10y_yield", "US 10y yield"), ("brent", "Brent crude")]:
@@ -234,14 +298,7 @@ def main():
     text = "\n".join(lines)
     print("\n" + text)
     telegram(text)
-
-    p = DATA / "run_log.csv"
-    new = not p.exists()
-    with open(p, "a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=["run_date", "source", "ok", "detail"])
-        if new:
-            w.writeheader()
-        w.writerows(log)
+    write_log()
 
 
 if __name__ == "__main__":
