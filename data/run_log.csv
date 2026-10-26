@@ -20,3 +20,5 @@ run_date,source,ok,detail
 2026-10-24,indicators,True,
 2026-10-24,telegram,True,
 2026-10-26,options,True,"nifty,btc,eth,sp500_spy"
+2026-10-27,daily_fii_dii,True,26-Oct-2026
+2026-10-27,options,True,"nifty,btc,eth,sp500_spy"
