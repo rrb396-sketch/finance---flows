@@ -67,3 +67,4 @@ run_date,source,ok,detail
 2026-11-14,indicators,True,
 2026-11-14,options,True,
 2026-11-14,telegram,True,
+2026-11-16,options,True,"nifty,btc,eth,sp500_spy"
