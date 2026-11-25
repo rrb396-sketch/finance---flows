@@ -86,3 +86,5 @@ run_date,source,ok,detail
 2026-11-23,options,True,"nifty,btc,eth,sp500_spy"
 2026-11-24,daily_fii_dii,True,23-Nov-2026
 2026-11-24,options,True,"nifty,btc,eth,sp500_spy"
+2026-11-25,daily_fii_dii,True,23-Nov-2026
+2026-11-25,options,True,"nifty,btc,eth,sp500_spy"
